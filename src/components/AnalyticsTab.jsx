@@ -146,7 +146,7 @@ const Analytics = ({ searchQuery }) => {
                                                                     </a>
                                                                 </td>
                                                                 <td style={{ padding: '0.75rem', color: 'var(--text-main)', whiteSpace: 'nowrap' }}>
-                                                                    {record.scan_duration_ms ? `${(record.scan_duration_ms)}s` : 'N/A'}
+                                                                    {record.scan_duration_ms ? `${(record.scan_duration_ms/1000)}s` : 'N/A'}
                                                                 </td>
                                                                 <td style={{ padding: '0.75rem', color: 'var(--text-main)', textAlign: 'center', fontWeight: '600' }}>
                                                                     {record.total_questions || 0}
@@ -280,3 +280,4 @@ const Analytics = ({ searchQuery }) => {
 };
 
 export default Analytics;
+
