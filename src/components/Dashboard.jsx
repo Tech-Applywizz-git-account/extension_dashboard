@@ -496,7 +496,6 @@
 
 
 
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -639,9 +638,9 @@ const Dashboard = ({ user, onLogout }) => {
                 { key: 'd4', from: 96, to: 72 },   // day 4
                 { key: 'd5', from: 120, to: 96 },   // day 5
                 { key: 'd6', from: 144, to: 120 },   // day 6
-                { key: 'd7', from: 168, to: 144 },   // day 7
-                { key: 'd15', from: 360, to: 168 },   // days 8–15
-                { key: 'd30', from: 720, to: 360 },   // days 16–30
+                { key: 'd7', from: 168, to: 0 },   // day 7
+                { key: 'd15', from: 360, to: 0 },   // days 8–15
+                { key: 'd30', from: 720, to: 0 },   // days 16–30
             ];
 
             const buildPeriods = (rows, fn) =>
