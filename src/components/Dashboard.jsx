@@ -47,6 +47,7 @@
 //     // Real database data state
 //     const [analytics, setAnalytics] = useState([]);
 //     const [patterns, setPatterns] = useState([]);
+//     const [feedbacksAll, setFeedbacksAll] = useState([]);
 //     const [usersCount, setUsersCount] = useState(0);
 //     const [stats, setStats] = useState({
 //         totalScans: 0,
@@ -54,6 +55,7 @@
 //         avgTime: 0,
 //         patternCount: 0
 //     });
+//     const [summaryStats, setSummaryStats] = useState(null);
 
 //     const [barData, setBarData] = useState([]);
 //     const [pieData, setPieData] = useState([]);
@@ -73,25 +75,99 @@
 //             else if (dateRange === 'Last 30 Days') startDate.setDate(startDate.getDate() - 30);
 //             else startDate.setDate(startDate.getDate() - 365); // All time or custom
 
-//             // 1. Fetch Analytics
+//             // 1. Fetch Analytics (date-range filtered, for charts & stats)
 //             const { data: analyticsData } = await supabase
 //                 .from('extension_analytics')
 //                 .select('*')
 //                 .gte('created_at', startDate.toISOString())
 //                 .order('created_at', { ascending: false });
 
-//             // 2. Fetch Patterns
+//             // 1b. Fetch ALL analytics (all-time, for the summary table)
+//             const { data: analyticsAllData } = await supabase
+//                 .from('extension_analytics')
+//                 .select('*')
+//                 .order('created_at', { ascending: false });
+
+//             // 2. Fetch Patterns (all time)
 //             const { data: patternsData } = await supabase
 //                 .from('learned_patterns')
 //                 .select('*')
 //                 .order('created_at', { ascending: false });
 
-//             // 3. Fetch Users Count
+//             // 3b. Fetch all feedbacks for summary
+//             const { data: feedbacksData } = await supabase
+//                 .from('feedbacks')
+//                 .select('*')
+//                 .order('created_at', { ascending: false });
+
+//             // 4. Fetch Users Count
 //             const { count, error: userError } = await supabase
 //                 .from('user_profiles')
 //                 .select('*', { count: 'exact', head: true });
 
 //             if (userError) console.error('Error fetching user count:', userError);
+
+//             // Helper: filter rows within an exclusive window (from hoursFrom ago → hoursTo ago)
+//             // hoursTo = 0 means "up to now"
+//             const inWindow = (rows, hoursFrom, hoursTo = 0) => {
+//                 const now = Date.now();
+//                 const from = new Date(now - hoursFrom * 3600000);
+//                 const to = hoursTo === 0 ? new Date(now) : new Date(now - hoursTo * 3600000);
+//                 return (rows || []).filter(r => {
+//                     if (!r.created_at) return false;
+//                     const d = new Date(r.created_at);
+//                     return d >= from && d < to;
+//                 });
+//             };
+
+//             // Compute success ratio for a slice of analytics rows
+//             const successRatio = (rows) => {
+//                 const s = rows.reduce((a, c) => a + (c.filled_success_count || 0), 0);
+//                 const f = rows.reduce((a, c) => a + (c.filled_failed_count || 0), 0);
+//                 return (s + f) > 0 ? ((s / (s + f)) * 100).toFixed(1) + '%' : '—';
+//             };
+
+//             const allAnalytics = analyticsAllData || [];
+//             const allFeedbacks = feedbacksData || [];
+//             const allPatterns = patternsData || [];
+
+//             // Each period: [fromHours, toHours] — exclusive window
+//             // e.g. d2 = records between 48h ago and 24h ago
+//             const periods = [
+//                 { key: 'h24', from: 24, to: 0 },   // last 24 hours
+//                 { key: 'd2', from: 48, to: 24 },   // day 2
+//                 { key: 'd3', from: 72, to: 48 },   // day 3
+//                 { key: 'd4', from: 96, to: 72 },   // day 4
+//                 { key: 'd5', from: 120, to: 96 },   // day 5
+//                 { key: 'd6', from: 144, to: 120 },   // day 6
+//                 { key: 'd7', from: 168, to: 0 },   // day 7
+//                 { key: 'd15', from: 360, to: 0 },   // days 8–15
+//                 { key: 'd30', from: 720, to: 0 },   // days 16–30
+//             ];
+
+//             const buildPeriods = (rows, fn) =>
+//                 Object.fromEntries(periods.map(p => [p.key, fn(inWindow(rows, p.from, p.to))]));
+
+//             setSummaryStats({
+//                 feedbacks: {
+//                     total: allFeedbacks.length,
+//                     ...buildPeriods(allFeedbacks, r => r.length),
+//                 },
+//                 scans: {
+//                     total: allAnalytics.length,
+//                     ...buildPeriods(allAnalytics, r => r.length),
+//                 },
+//                 successRatio: {
+//                     total: successRatio(allAnalytics),
+//                     ...buildPeriods(allAnalytics, r => successRatio(r)),
+//                 },
+//                 patterns: {
+//                     total: allPatterns.length,
+//                     ...buildPeriods(allPatterns, r => r.length),
+//                 },
+//             });
+
+//             if (feedbacksData) setFeedbacksAll(feedbacksData);
 
 //             if (analyticsData) {
 //                 setAnalytics(analyticsData);
@@ -430,6 +506,72 @@
 //                             <StatCard title="Learned Patterns" value={stats.patternCount} change="+18" icon={<Zap size={20} />} color="#f59e0b" />
 //                         </div>
 
+//                         {/* Summary Table */}
+//                         {summaryStats && (
+//                             <div style={{
+//                                 background: 'var(--bg-card)',
+//                                 borderRadius: '1rem',
+//                                 boxShadow: 'var(--shadow)',
+//                                 marginBottom: '2rem',
+//                                 overflow: 'hidden'
+//                             }}>
+//                                 <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border)' }}>
+//                                     <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-main)', margin: 0 }}>Activity Summary</h3>
+//                                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Click any row to view details</p>
+//                                 </div>
+//                                 <div style={{ overflowX: 'auto' }}>
+//                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+//                                         <thead>
+//                                             <tr style={{ background: 'var(--bg-main)' }}>
+//                                                 {['Metric', 'Total', 'Last 24h', 'Last 2 Days', 'Last 3 Days', 'Last 4 Days', 'Last 5 Days', 'Last 6 Days', 'Last 7 Days', 'Last 15 Days', 'Last 30 Days'].map(h => (
+//                                                     <th key={h} style={{
+//                                                         padding: '0.75rem 1.25rem',
+//                                                         textAlign: h === 'Metric' ? 'left' : 'center',
+//                                                         fontWeight: '600',
+//                                                         color: 'var(--text-muted)',
+//                                                         fontSize: '0.75rem',
+//                                                         textTransform: 'uppercase',
+//                                                         letterSpacing: '0.05em',
+//                                                         whiteSpace: 'nowrap'
+//                                                     }}>{h}</th>
+//                                                 ))}
+//                                             </tr>
+//                                         </thead>
+//                                         <tbody>
+//                                             {[
+//                                                 { label: '💬 Feedbacks', data: summaryStats.feedbacks, tab: 'Feedback', color: '#6366f1' },
+//                                                 { label: '📋 Filled Forms (Scans)', data: summaryStats.scans, tab: 'Analytics', color: '#2563eb' },
+//                                                 { label: '✅ Success Ratio', data: summaryStats.successRatio, tab: null, color: '#10b981' },
+//                                                 { label: '🧠 Learned Patterns', data: summaryStats.patterns, tab: 'Learned Patterns', color: '#f59e0b' },
+//                                             ].map((row, i) => (
+//                                                 <tr
+//                                                     key={i}
+//                                                     onClick={() => row.tab && setActiveTab(row.tab)}
+//                                                     style={{
+//                                                         borderTop: '1px solid var(--border)',
+//                                                         cursor: row.tab ? 'pointer' : 'default',
+//                                                         transition: 'background 0.15s',
+//                                                     }}
+//                                                     onMouseEnter={e => { if (row.tab) e.currentTarget.style.background = 'var(--bg-main)'; }}
+//                                                     onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+//                                                 >
+//                                                     <td style={{ padding: '1rem 1.25rem', fontWeight: '600', color: row.color, whiteSpace: 'nowrap' }}>
+//                                                         {row.label}
+//                                                         {row.tab && <span style={{ marginLeft: '0.4rem', fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '400' }}>→</span>}
+//                                                     </td>
+//                                                     {['total', 'h24', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd15', 'd30'].map(period => (
+//                                                         <td key={period} style={{ padding: '0.875rem 1rem', textAlign: 'center', fontWeight: period === 'total' ? '700' : '500', color: period === 'total' ? 'var(--text-main)' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+//                                                             {row.data[period]}
+//                                                         </td>
+//                                                     ))}
+//                                                 </tr>
+//                                             ))}
+//                                         </tbody>
+//                                     </table>
+//                                 </div>
+//                             </div>
+//                         )}
+
 //                         {/* Charts Grid */}
 //                         <div style={{
 //                             display: 'grid',
@@ -492,6 +634,16 @@
 // };
 
 // export default Dashboard;
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -605,6 +757,22 @@ const Dashboard = ({ user, onLogout }) => {
 
             if (userError) console.error('Error fetching user count:', userError);
 
+            // Helpers for date formatting and range generation
+            const formatDate = (date) => {
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const d = new Date(date);
+                // For simpler labels as requested "22 Feb"
+                return `${d.getDate()} ${months[d.getMonth()]}`;
+            };
+
+            const getDatesArray = (start, end) => {
+                const arr = [];
+                for (let dt = new Date(start); dt <= end; dt.setDate(dt.getDate() + 1)) {
+                    arr.push(new Date(dt));
+                }
+                return arr;
+            };
+
             // Helper: filter rows within an exclusive window (from hoursFrom ago → hoursTo ago)
             // hoursTo = 0 means "up to now"
             const inWindow = (rows, hoursFrom, hoursTo = 0) => {
@@ -629,40 +797,35 @@ const Dashboard = ({ user, onLogout }) => {
             const allFeedbacks = feedbacksData || [];
             const allPatterns = patternsData || [];
 
-            // Each period: [fromHours, toHours] — exclusive window
-            // e.g. d2 = records between 48h ago and 24h ago
-            const periods = [
-                { key: 'h24', from: 24, to: 0 },   // last 24 hours
-                { key: 'd2', from: 48, to: 24 },   // day 2
-                { key: 'd3', from: 72, to: 48 },   // day 3
-                { key: 'd4', from: 96, to: 72 },   // day 4
-                { key: 'd5', from: 120, to: 96 },   // day 5
-                { key: 'd6', from: 144, to: 120 },   // day 6
-                { key: 'd7', from: 168, to: 0 },   // day 7
-                { key: 'd15', from: 360, to: 0 },   // days 8–15
-                { key: 'd30', from: 720, to: 0 },   // days 16–30
-            ];
+            // Dynamic periods for the summary table: Last 7 specific dates
+            const summaryPeriods = [];
+            for (let i = 0; i < 7; i++) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                summaryPeriods.push({
+                    key: d.toDateString(),
+                    label: formatDate(d),
+                    filter: (rows) => (rows || []).filter(r => new Date(r.created_at).toDateString() === d.toDateString())
+                });
+            }
 
-            const buildPeriods = (rows, fn) =>
-                Object.fromEntries(periods.map(p => [p.key, fn(inWindow(rows, p.from, p.to))]));
+            const buildSummaryData = (rows, valFn) => {
+                const data = { total: valFn(rows || []) };
+                summaryPeriods.forEach(p => {
+                    data[p.key] = valFn(p.filter(rows));
+                });
+                // Keep some aggregates
+                data['d15'] = valFn(inWindow(rows, 360, 0));
+                data['d30'] = valFn(inWindow(rows, 720, 0));
+                return data;
+            };
 
             setSummaryStats({
-                feedbacks: {
-                    total: allFeedbacks.length,
-                    ...buildPeriods(allFeedbacks, r => r.length),
-                },
-                scans: {
-                    total: allAnalytics.length,
-                    ...buildPeriods(allAnalytics, r => r.length),
-                },
-                successRatio: {
-                    total: successRatio(allAnalytics),
-                    ...buildPeriods(allAnalytics, r => successRatio(r)),
-                },
-                patterns: {
-                    total: allPatterns.length,
-                    ...buildPeriods(allPatterns, r => r.length),
-                },
+                feedbacks: buildSummaryData(allFeedbacks, r => r.length),
+                scans: buildSummaryData(allAnalytics, r => r.length),
+                successRatio: buildSummaryData(allAnalytics, r => successRatio(r)),
+                patterns: buildSummaryData(allPatterns, r => r.length),
+                summaryPeriods // Pass this to render for headers
             });
 
             if (feedbacksData) setFeedbacksAll(feedbacksData);
@@ -684,14 +847,20 @@ const Dashboard = ({ user, onLogout }) => {
                     patternCount: patternsData?.length || 0
                 });
 
-                // Prepare Bar Data (Daily)
-                const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                const dayCounts = analyticsData.reduce((acc, curr) => {
-                    const day = days[new Date(curr.created_at).getDay()];
-                    acc[day] = (acc[day] || 0) + 1;
+                const end = new Date();
+                const start = new Date(startDate);
+                const dateAxis = getDatesArray(start, end);
+
+                const dateCounts = analyticsData.reduce((acc, curr) => {
+                    const dateKey = new Date(curr.created_at).toDateString();
+                    acc[dateKey] = (acc[dateKey] || 0) + 1;
                     return acc;
                 }, {});
-                setBarData(days.map(d => ({ name: d, scans: dayCounts[d] || 0 })));
+
+                setBarData(dateAxis.map(d => ({
+                    name: formatDate(d),
+                    scans: dateCounts[d.toDateString()] || 0
+                })));
 
                 // Prepare Horizontal Data (Success by URL)
                 const urlStats = analyticsData.reduce((acc, curr) => {
@@ -1021,18 +1190,58 @@ const Dashboard = ({ user, onLogout }) => {
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                                         <thead>
                                             <tr style={{ background: 'var(--bg-main)' }}>
-                                                {['Metric', 'Total', 'Last 24h', 'Last 2 Days', 'Last 3 Days', 'Last 4 Days', 'Last 5 Days', 'Last 6 Days', 'Last 7 Days', 'Last 15 Days', 'Last 30 Days'].map(h => (
-                                                    <th key={h} style={{
+                                                <th style={{
+                                                    padding: '0.75rem 1.25rem',
+                                                    textAlign: 'left',
+                                                    fontWeight: '600',
+                                                    color: 'var(--text-muted)',
+                                                    fontSize: '0.75rem',
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.05em',
+                                                    whiteSpace: 'nowrap'
+                                                }}>Metric</th>
+                                                <th style={{
+                                                    padding: '0.75rem 1.25rem',
+                                                    textAlign: 'center',
+                                                    fontWeight: '600',
+                                                    color: 'var(--text-muted)',
+                                                    fontSize: '0.75rem',
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.05em',
+                                                    whiteSpace: 'nowrap'
+                                                }}>Total</th>
+                                                {summaryStats.summaryPeriods.map(p => (
+                                                    <th key={p.key} style={{
                                                         padding: '0.75rem 1.25rem',
-                                                        textAlign: h === 'Metric' ? 'left' : 'center',
+                                                        textAlign: 'center',
                                                         fontWeight: '600',
                                                         color: 'var(--text-muted)',
                                                         fontSize: '0.75rem',
                                                         textTransform: 'uppercase',
                                                         letterSpacing: '0.05em',
                                                         whiteSpace: 'nowrap'
-                                                    }}>{h}</th>
+                                                    }}>{p.label}</th>
                                                 ))}
+                                                <th style={{
+                                                    padding: '0.75rem 1.25rem',
+                                                    textAlign: 'center',
+                                                    fontWeight: '600',
+                                                    color: 'var(--text-muted)',
+                                                    fontSize: '0.75rem',
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.05em',
+                                                    whiteSpace: 'nowrap'
+                                                }}>Last 15d</th>
+                                                <th style={{
+                                                    padding: '0.75rem 1.25rem',
+                                                    textAlign: 'center',
+                                                    fontWeight: '600',
+                                                    color: 'var(--text-muted)',
+                                                    fontSize: '0.75rem',
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.05em',
+                                                    whiteSpace: 'nowrap'
+                                                }}>Last 30d</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1057,11 +1266,20 @@ const Dashboard = ({ user, onLogout }) => {
                                                         {row.label}
                                                         {row.tab && <span style={{ marginLeft: '0.4rem', fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '400' }}>→</span>}
                                                     </td>
-                                                    {['total', 'h24', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd15', 'd30'].map(period => (
-                                                        <td key={period} style={{ padding: '0.875rem 1rem', textAlign: 'center', fontWeight: period === 'total' ? '700' : '500', color: period === 'total' ? 'var(--text-main)' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                                                            {row.data[period]}
+                                                    <td style={{ padding: '0.875rem 1rem', textAlign: 'center', fontWeight: '700', color: 'var(--text-main)', whiteSpace: 'nowrap' }}>
+                                                        {row.data.total}
+                                                    </td>
+                                                    {summaryStats.summaryPeriods.map(p => (
+                                                        <td key={p.key} style={{ padding: '0.875rem 1rem', textAlign: 'center', fontWeight: '500', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                                                            {row.data[p.key]}
                                                         </td>
                                                     ))}
+                                                    <td style={{ padding: '0.875rem 1rem', textAlign: 'center', fontWeight: '500', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                                                        {row.data.d15}
+                                                    </td>
+                                                    <td style={{ padding: '0.875rem 1rem', textAlign: 'center', fontWeight: '500', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                                                        {row.data.d30}
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
