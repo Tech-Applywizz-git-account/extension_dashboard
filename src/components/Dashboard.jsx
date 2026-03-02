@@ -107,6 +107,22 @@
 
 //             if (userError) console.error('Error fetching user count:', userError);
 
+//             // Helpers for date formatting and range generation
+//             const formatDate = (date) => {
+//                 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+//                 const d = new Date(date);
+//                 // For simpler labels as requested "22 Feb"
+//                 return `${d.getDate()} ${months[d.getMonth()]}`;
+//             };
+
+//             const getDatesArray = (start, end) => {
+//                 const arr = [];
+//                 for (let dt = new Date(start); dt <= end; dt.setDate(dt.getDate() + 1)) {
+//                     arr.push(new Date(dt));
+//                 }
+//                 return arr;
+//             };
+
 //             // Helper: filter rows within an exclusive window (from hoursFrom ago → hoursTo ago)
 //             // hoursTo = 0 means "up to now"
 //             const inWindow = (rows, hoursFrom, hoursTo = 0) => {
@@ -131,40 +147,35 @@
 //             const allFeedbacks = feedbacksData || [];
 //             const allPatterns = patternsData || [];
 
-//             // Each period: [fromHours, toHours] — exclusive window
-//             // e.g. d2 = records between 48h ago and 24h ago
-//             const periods = [
-//                 { key: 'h24', from: 24, to: 0 },   // last 24 hours
-//                 { key: 'd2', from: 48, to: 24 },   // day 2
-//                 { key: 'd3', from: 72, to: 48 },   // day 3
-//                 { key: 'd4', from: 96, to: 72 },   // day 4
-//                 { key: 'd5', from: 120, to: 96 },   // day 5
-//                 { key: 'd6', from: 144, to: 120 },   // day 6
-//                 { key: 'd7', from: 168, to: 0 },   // day 7
-//                 { key: 'd15', from: 360, to: 0 },   // days 8–15
-//                 { key: 'd30', from: 720, to: 0 },   // days 16–30
-//             ];
+//             // Dynamic periods for the summary table: Last 7 specific dates
+//             const summaryPeriods = [];
+//             for (let i = 0; i < 7; i++) {
+//                 const d = new Date();
+//                 d.setDate(d.getDate() - i);
+//                 summaryPeriods.push({
+//                     key: d.toDateString(),
+//                     label: formatDate(d),
+//                     filter: (rows) => (rows || []).filter(r => new Date(r.created_at).toDateString() === d.toDateString())
+//                 });
+//             }
 
-//             const buildPeriods = (rows, fn) =>
-//                 Object.fromEntries(periods.map(p => [p.key, fn(inWindow(rows, p.from, p.to))]));
+//             const buildSummaryData = (rows, valFn) => {
+//                 const data = { total: valFn(rows || []) };
+//                 summaryPeriods.forEach(p => {
+//                     data[p.key] = valFn(p.filter(rows));
+//                 });
+//                 // Keep some aggregates
+//                 data['d15'] = valFn(inWindow(rows, 360, 0));
+//                 data['d30'] = valFn(inWindow(rows, 720, 0));
+//                 return data;
+//             };
 
 //             setSummaryStats({
-//                 feedbacks: {
-//                     total: allFeedbacks.length,
-//                     ...buildPeriods(allFeedbacks, r => r.length),
-//                 },
-//                 scans: {
-//                     total: allAnalytics.length,
-//                     ...buildPeriods(allAnalytics, r => r.length),
-//                 },
-//                 successRatio: {
-//                     total: successRatio(allAnalytics),
-//                     ...buildPeriods(allAnalytics, r => successRatio(r)),
-//                 },
-//                 patterns: {
-//                     total: allPatterns.length,
-//                     ...buildPeriods(allPatterns, r => r.length),
-//                 },
+//                 feedbacks: buildSummaryData(allFeedbacks, r => r.length),
+//                 scans: buildSummaryData(allAnalytics, r => r.length),
+//                 successRatio: buildSummaryData(allAnalytics, r => successRatio(r)),
+//                 patterns: buildSummaryData(allPatterns, r => r.length),
+//                 summaryPeriods // Pass this to render for headers
 //             });
 
 //             if (feedbacksData) setFeedbacksAll(feedbacksData);
@@ -186,14 +197,20 @@
 //                     patternCount: patternsData?.length || 0
 //                 });
 
-//                 // Prepare Bar Data (Daily)
-//                 const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-//                 const dayCounts = analyticsData.reduce((acc, curr) => {
-//                     const day = days[new Date(curr.created_at).getDay()];
-//                     acc[day] = (acc[day] || 0) + 1;
+//                 const end = new Date();
+//                 const start = new Date(startDate);
+//                 const dateAxis = getDatesArray(start, end);
+
+//                 const dateCounts = analyticsData.reduce((acc, curr) => {
+//                     const dateKey = new Date(curr.created_at).toDateString();
+//                     acc[dateKey] = (acc[dateKey] || 0) + 1;
 //                     return acc;
 //                 }, {});
-//                 setBarData(days.map(d => ({ name: d, scans: dayCounts[d] || 0 })));
+
+//                 setBarData(dateAxis.map(d => ({
+//                     name: formatDate(d),
+//                     scans: dateCounts[d.toDateString()] || 0
+//                 })));
 
 //                 // Prepare Horizontal Data (Success by URL)
 //                 const urlStats = analyticsData.reduce((acc, curr) => {
@@ -523,18 +540,58 @@
 //                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
 //                                         <thead>
 //                                             <tr style={{ background: 'var(--bg-main)' }}>
-//                                                 {['Metric', 'Total', 'Last 24h', 'Last 2 Days', 'Last 3 Days', 'Last 4 Days', 'Last 5 Days', 'Last 6 Days', 'Last 7 Days', 'Last 15 Days', 'Last 30 Days'].map(h => (
-//                                                     <th key={h} style={{
+//                                                 <th style={{
+//                                                     padding: '0.75rem 1.25rem',
+//                                                     textAlign: 'left',
+//                                                     fontWeight: '600',
+//                                                     color: 'var(--text-muted)',
+//                                                     fontSize: '0.75rem',
+//                                                     textTransform: 'uppercase',
+//                                                     letterSpacing: '0.05em',
+//                                                     whiteSpace: 'nowrap'
+//                                                 }}>Metric</th>
+//                                                 <th style={{
+//                                                     padding: '0.75rem 1.25rem',
+//                                                     textAlign: 'center',
+//                                                     fontWeight: '600',
+//                                                     color: 'var(--text-muted)',
+//                                                     fontSize: '0.75rem',
+//                                                     textTransform: 'uppercase',
+//                                                     letterSpacing: '0.05em',
+//                                                     whiteSpace: 'nowrap'
+//                                                 }}>Total</th>
+//                                                 {summaryStats.summaryPeriods.map(p => (
+//                                                     <th key={p.key} style={{
 //                                                         padding: '0.75rem 1.25rem',
-//                                                         textAlign: h === 'Metric' ? 'left' : 'center',
+//                                                         textAlign: 'center',
 //                                                         fontWeight: '600',
 //                                                         color: 'var(--text-muted)',
 //                                                         fontSize: '0.75rem',
 //                                                         textTransform: 'uppercase',
 //                                                         letterSpacing: '0.05em',
 //                                                         whiteSpace: 'nowrap'
-//                                                     }}>{h}</th>
+//                                                     }}>{p.label}</th>
 //                                                 ))}
+//                                                 <th style={{
+//                                                     padding: '0.75rem 1.25rem',
+//                                                     textAlign: 'center',
+//                                                     fontWeight: '600',
+//                                                     color: 'var(--text-muted)',
+//                                                     fontSize: '0.75rem',
+//                                                     textTransform: 'uppercase',
+//                                                     letterSpacing: '0.05em',
+//                                                     whiteSpace: 'nowrap'
+//                                                 }}>Last 15d</th>
+//                                                 <th style={{
+//                                                     padding: '0.75rem 1.25rem',
+//                                                     textAlign: 'center',
+//                                                     fontWeight: '600',
+//                                                     color: 'var(--text-muted)',
+//                                                     fontSize: '0.75rem',
+//                                                     textTransform: 'uppercase',
+//                                                     letterSpacing: '0.05em',
+//                                                     whiteSpace: 'nowrap'
+//                                                 }}>Last 30d</th>
 //                                             </tr>
 //                                         </thead>
 //                                         <tbody>
@@ -559,11 +616,20 @@
 //                                                         {row.label}
 //                                                         {row.tab && <span style={{ marginLeft: '0.4rem', fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '400' }}>→</span>}
 //                                                     </td>
-//                                                     {['total', 'h24', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd15', 'd30'].map(period => (
-//                                                         <td key={period} style={{ padding: '0.875rem 1rem', textAlign: 'center', fontWeight: period === 'total' ? '700' : '500', color: period === 'total' ? 'var(--text-main)' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-//                                                             {row.data[period]}
+//                                                     <td style={{ padding: '0.875rem 1rem', textAlign: 'center', fontWeight: '700', color: 'var(--text-main)', whiteSpace: 'nowrap' }}>
+//                                                         {row.data.total}
+//                                                     </td>
+//                                                     {summaryStats.summaryPeriods.map(p => (
+//                                                         <td key={p.key} style={{ padding: '0.875rem 1rem', textAlign: 'center', fontWeight: '500', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+//                                                             {row.data[p.key]}
 //                                                         </td>
 //                                                     ))}
+//                                                     <td style={{ padding: '0.875rem 1rem', textAlign: 'center', fontWeight: '500', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+//                                                         {row.data.d15}
+//                                                     </td>
+//                                                     <td style={{ padding: '0.875rem 1rem', textAlign: 'center', fontWeight: '500', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+//                                                         {row.data.d30}
+//                                                     </td>
 //                                                 </tr>
 //                                             ))}
 //                                         </tbody>
@@ -641,13 +707,6 @@
 
 
 
-
-
-
-
-
-
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -666,7 +725,8 @@ import {
     Zap,
     Menu,
     X,
-    MessageSquare
+    MessageSquare,
+    Briefcase
 } from 'lucide-react';
 import { StatCard, MetricBarChart, PatternPieChart, SuccessRateBarChart } from './Charts';
 import { DataTable } from './DataTable';
@@ -674,6 +734,7 @@ import ActiveUsers from './ActiveUsers';
 import LearnedPatterns from './LearnedPatterns';
 import Feedback from './Feedback';
 import AnalyticsTab from './AnalyticsTab';
+import CAActivity from './CAActivity';
 
 import { supabase } from '../lib/supabase';
 
@@ -922,6 +983,7 @@ const Dashboard = ({ user, onLogout }) => {
         { icon: <BrainCircuit size={20} />, label: 'Learned Patterns' },
         { icon: <Users size={20} />, label: 'Active Users' },
         { icon: <BarChart3 size={20} />, label: 'Analytics' },
+        { icon: <Briefcase size={20} />, label: 'CA activity' },
         { icon: <MessageSquare size={20} />, label: 'Feedback' },
         { icon: <Settings size={20} />, label: 'Settings' },
     ];
@@ -1320,6 +1382,8 @@ const Dashboard = ({ user, onLogout }) => {
                     <LearnedPatterns searchQuery={searchQuery} />
                 ) : activeTab === 'Analytics' ? (
                     <AnalyticsTab searchQuery={searchQuery} />
+                ) : activeTab === 'CA activity' ? (
+                    <CAActivity searchQuery={searchQuery} />
                 ) : activeTab === 'Feedback' ? (
                     <Feedback searchQuery={searchQuery} dateRange={dateRange} customDates={customDates} />
                 ) : (
