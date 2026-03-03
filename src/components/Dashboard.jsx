@@ -16,7 +16,8 @@
 //     Zap,
 //     Menu,
 //     X,
-//     MessageSquare
+//     MessageSquare,
+//     Briefcase
 // } from 'lucide-react';
 // import { StatCard, MetricBarChart, PatternPieChart, SuccessRateBarChart } from './Charts';
 // import { DataTable } from './DataTable';
@@ -24,6 +25,7 @@
 // import LearnedPatterns from './LearnedPatterns';
 // import Feedback from './Feedback';
 // import AnalyticsTab from './AnalyticsTab';
+// import CAActivity from './CAActivity';
 
 // import { supabase } from '../lib/supabase';
 
@@ -272,6 +274,7 @@
 //         { icon: <BrainCircuit size={20} />, label: 'Learned Patterns' },
 //         { icon: <Users size={20} />, label: 'Active Users' },
 //         { icon: <BarChart3 size={20} />, label: 'Analytics' },
+//         { icon: <Briefcase size={20} />, label: 'CA activity' },
 //         { icon: <MessageSquare size={20} />, label: 'Feedback' },
 //         { icon: <Settings size={20} />, label: 'Settings' },
 //     ];
@@ -670,6 +673,8 @@
 //                     <LearnedPatterns searchQuery={searchQuery} />
 //                 ) : activeTab === 'Analytics' ? (
 //                     <AnalyticsTab searchQuery={searchQuery} />
+//                 ) : activeTab === 'CA activity' ? (
+//                     <CAActivity searchQuery={searchQuery} />
 //                 ) : activeTab === 'Feedback' ? (
 //                     <Feedback searchQuery={searchQuery} dateRange={dateRange} customDates={customDates} />
 //                 ) : (
@@ -700,11 +705,6 @@
 // };
 
 // export default Dashboard;
-
-
-
-
-
 
 
 import React, { useState, useEffect } from 'react';
@@ -1383,7 +1383,7 @@ const Dashboard = ({ user, onLogout }) => {
                 ) : activeTab === 'Analytics' ? (
                     <AnalyticsTab searchQuery={searchQuery} />
                 ) : activeTab === 'CA activity' ? (
-                    <CAActivity searchQuery={searchQuery} />
+                    <CAActivity searchQuery={searchQuery} dateRange={dateRange} customDates={customDates} />
                 ) : activeTab === 'Feedback' ? (
                     <Feedback searchQuery={searchQuery} dateRange={dateRange} customDates={customDates} />
                 ) : (
