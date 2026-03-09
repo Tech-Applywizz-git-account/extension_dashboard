@@ -633,7 +633,7 @@ const Feedback = ({ searchQuery, dateRange, customDates }) => {
                             >
                                 Date <SortIcon column="created_at" />
                             </button>
-                            <button
+                            {/* <button
                                 onClick={() => handleSort('feedback_type')}
                                 style={{
                                     display: 'flex',
@@ -649,7 +649,7 @@ const Feedback = ({ searchQuery, dateRange, customDates }) => {
                                 }}
                             >
                                 Type <SortIcon column="feedback_type" />
-                            </button>
+                            </button> */}
                         </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -802,3 +802,4 @@ const Feedback = ({ searchQuery, dateRange, customDates }) => {
 };
 
 export default Feedback;
+
