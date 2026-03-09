@@ -5,7 +5,7 @@
 //     Users,
 //     BrainCircuit,
 //     BarChart3,
-//     Settings,
+//     Settings,a
 //     LogOut,
 //     Calendar,
 //     Search,
@@ -674,7 +674,7 @@
 //                 ) : activeTab === 'Analytics' ? (
 //                     <AnalyticsTab searchQuery={searchQuery} />
 //                 ) : activeTab === 'CA activity' ? (
-//                     <CAActivity searchQuery={searchQuery} />
+//                     <CAActivity searchQuery={searchQuery} dateRange={dateRange} customDates={customDates} />
 //                 ) : activeTab === 'Feedback' ? (
 //                     <Feedback searchQuery={searchQuery} dateRange={dateRange} customDates={customDates} />
 //                 ) : (
@@ -707,6 +707,17 @@
 // export default Dashboard;
 
 
+
+
+
+
+
+
+
+
+
+
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -725,6 +736,7 @@ import {
     Zap,
     Menu,
     X,
+    Check,
     MessageSquare,
     Briefcase
 } from 'lucide-react';
@@ -745,6 +757,7 @@ const Dashboard = ({ user, onLogout }) => {
 
     const [dateRange, setDateRange] = useState('Last 7 Days');
     const [customDates, setCustomDates] = useState({ start: '', end: '' });
+    const [tempCustomDates, setTempCustomDates] = useState({ start: '', end: '' });
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [isDateDropdownOpen, setIsDateDropdownOpen] = useState(false);
@@ -774,23 +787,40 @@ const Dashboard = ({ user, onLogout }) => {
 
     useEffect(() => {
         fetchDashboardData();
-    }, [dateRange]);
+    }, [dateRange, customDates]);
 
     const fetchDashboardData = async () => {
         setIsLoading(true);
         try {
-            // Calculate start date based on filter
+            // Calculate start and end dates based on filter
             let startDate = new Date();
-            if (dateRange === 'Today') startDate.setHours(0, 0, 0, 0);
-            else if (dateRange === 'Last 7 Days') startDate.setDate(startDate.getDate() - 7);
-            else if (dateRange === 'Last 30 Days') startDate.setDate(startDate.getDate() - 30);
-            else startDate.setDate(startDate.getDate() - 365); // All time or custom
+            let endDate = new Date();
+            endDate.setHours(23, 59, 59, 999);
+
+            if (dateRange === 'Today') {
+                startDate.setHours(0, 0, 0, 0);
+            } else if (dateRange === 'Last 7 Days') {
+                startDate.setDate(startDate.getDate() - 7);
+                startDate.setHours(0, 0, 0, 0);
+            } else if (dateRange === 'Last 30 Days') {
+                startDate.setDate(startDate.getDate() - 30);
+                startDate.setHours(0, 0, 0, 0);
+            } else if (dateRange === 'Custom Range' && customDates.start && customDates.end) {
+                startDate = new Date(customDates.start);
+                startDate.setHours(0, 0, 0, 0);
+                endDate = new Date(customDates.end);
+                endDate.setHours(23, 59, 59, 999);
+            } else {
+                startDate.setDate(startDate.getDate() - 365); // All time or default
+                startDate.setHours(0, 0, 0, 0);
+            }
 
             // 1. Fetch Analytics (date-range filtered, for charts & stats)
             const { data: analyticsData } = await supabase
                 .from('extension_analytics')
                 .select('*')
                 .gte('created_at', startDate.toISOString())
+                .lte('created_at', endDate.toISOString())
                 .order('created_at', { ascending: false });
 
             // 1b. Fetch ALL analytics (all-time, for the summary table)
@@ -1162,6 +1192,9 @@ const Dashboard = ({ user, onLogout }) => {
                                             onClick={() => {
                                                 setDateRange(range);
                                                 setIsDateDropdownOpen(false);
+                                                if (range === 'Custom Range') {
+                                                    setTempCustomDates(customDates);
+                                                }
                                             }}
                                             style={{
                                                 padding: '0.5rem 1rem',
@@ -1185,17 +1218,36 @@ const Dashboard = ({ user, onLogout }) => {
                                     type="date"
                                     className="input"
                                     style={{ padding: '0.4rem', fontSize: '0.8rem', width: '130px' }}
-                                    value={customDates.start}
-                                    onChange={(e) => setCustomDates(prev => ({ ...prev, start: e.target.value }))}
+                                    value={tempCustomDates.start}
+                                    onChange={(e) => setTempCustomDates(prev => ({ ...prev, start: e.target.value }))}
                                 />
                                 <span style={{ color: 'var(--text-muted)' }}>-</span>
                                 <input
                                     type="date"
                                     className="input"
                                     style={{ padding: '0.4rem', fontSize: '0.8rem', width: '130px' }}
-                                    value={customDates.end}
-                                    onChange={(e) => setCustomDates(prev => ({ ...prev, end: e.target.value }))}
+                                    value={tempCustomDates.end}
+                                    onChange={(e) => setTempCustomDates(prev => ({ ...prev, end: e.target.value }))}
                                 />
+                                <button
+                                    onClick={() => setCustomDates(tempCustomDates)}
+                                    title="Apply Date Range"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: '0.4rem',
+                                        borderRadius: '0.5rem',
+                                        background: 'var(--primary)',
+                                        color: 'white',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)'
+                                    }}
+                                >
+                                    <Check size={16} />
+                                </button>
                             </div>
                         )}
 
@@ -1358,7 +1410,9 @@ const Dashboard = ({ user, onLogout }) => {
                             marginBottom: '2rem'
                         }}>
                             <MetricBarChart data={barData} />
-                            <PatternPieChart data={pieData} />
+                            {/* <PatternPieChart data={pieData} /> */}
+                            <SuccessRateBarChart data={horizontalData} />
+
                         </div>
 
                         {/* Bottom Grid */}
@@ -1368,12 +1422,12 @@ const Dashboard = ({ user, onLogout }) => {
                             gap: '2rem',
                             marginBottom: '2rem'
                         }}>
-                            <DataTable
+                            {/* <DataTable
                                 title="Recent Learned Patterns"
                                 data={patterns.filter(p => p.id.toLowerCase().includes(searchQuery.toLowerCase()) || p.intent.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 5)}
                                 columns={tableColumns}
-                            />
-                            <SuccessRateBarChart data={horizontalData} />
+                            /> */}
+                            {/* <SuccessRateBarChart data={horizontalData} /> */}
                         </div>
                     </div>
                 ) : activeTab === 'Active Users' ? (
