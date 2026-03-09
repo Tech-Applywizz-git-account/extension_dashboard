@@ -1,8 +1,9 @@
 // import React, { useState } from 'react';
 // import { ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
-// export const DataTable = ({ title, data, columns, onViewAll, showActions = true }) => {
+// export const DataTable = ({ title, data, columns, onViewAll, onAction, renderExpandable, showActions = true, rowKey = 'id' }) => {
 //     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+//     const [expandedRowKey, setExpandedRowKey] = useState(null);
 
 //     const handleSort = (key) => {
 //         let direction = 'asc';
@@ -12,15 +13,16 @@
 //         setSortConfig({ key, direction });
 //     };
 
+//     const toggleExpand = (key) => {
+//         setExpandedRowKey(expandedRowKey === key ? null : key);
+//     };
+
 //     const sortedData = React.useMemo(() => {
 //         if (!sortConfig.key) return data;
 
 //         return [...data].sort((a, b) => {
 //             let aVal = a[sortConfig.key];
 //             let bVal = b[sortConfig.key];
-
-//             // Handle cases where value is inside a nested object if needed, 
-//             // but for now assume flat keys or handled by render
 
 //             if (aVal === bVal) return 0;
 //             if (aVal === null || aVal === undefined) return 1;
@@ -87,33 +89,58 @@
 //                                     ) : col.header}
 //                                 </th>
 //                             ))}
-//                             {showActions && <th style={{ padding: '1rem 1.5rem' }}></th>}
+//                             {(showActions || renderExpandable) && <th style={{ padding: '1rem 1.5rem' }}></th>}
 //                         </tr>
 //                     </thead>
 //                     <tbody>
-//                         {sortedData.map((row, rowIdx) => (
-//                             <tr key={rowIdx} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.2s' }} className="table-row-hover">
-//                                 {columns.map((col, colIdx) => (
-//                                     <td key={colIdx} style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: 'var(--text-main)' }}>
-//                                         {col.render ? col.render(row[col.key], row) : row[col.key]}
-//                                     </td>
-//                                 ))}
-//                                 {showActions && (
-//                                     <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
-//                                         <button style={{
-//                                             border: 'none',
-//                                             background: 'var(--primary-light)',
-//                                             color: 'var(--primary)',
-//                                             padding: '0.4rem',
-//                                             borderRadius: '0.5rem',
-//                                             cursor: 'pointer'
-//                                         }}>
-//                                             <ChevronRight size={16} />
-//                                         </button>
-//                                     </td>
-//                                 )}
-//                             </tr>
-//                         ))}
+//                         {sortedData.map((row, rowIdx) => {
+//                             const isExpanded = expandedRowKey === row[rowKey];
+//                             return (
+//                                 <React.Fragment key={rowIdx}>
+//                                     <tr style={{ borderBottom: isExpanded ? 'none' : '1px solid var(--border)', transition: 'background 0.2s' }} className="table-row-hover">
+//                                         {columns.map((col, colIdx) => (
+//                                             <td key={colIdx} style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: 'var(--text-main)' }}>
+//                                                 {col.render ? col.render(row[col.key], row) : row[col.key]}
+//                                             </td>
+//                                         ))}
+//                                         {(showActions || renderExpandable) && (
+//                                             <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
+//                                                 <button
+//                                                     onClick={() => {
+//                                                         if (renderExpandable) {
+//                                                             toggleExpand(row[rowKey]);
+//                                                         } else if (onAction) {
+//                                                             onAction(row);
+//                                                         }
+//                                                     }}
+//                                                     style={{
+//                                                         border: 'none',
+//                                                         background: isExpanded ? 'var(--primary)' : 'var(--primary-light)',
+//                                                         color: isExpanded ? 'white' : 'var(--primary)',
+//                                                         padding: '0.4rem',
+//                                                         borderRadius: '0.5rem',
+//                                                         cursor: 'pointer',
+//                                                         transition: 'all 0.2s',
+//                                                         transform: isExpanded ? 'rotate(90deg)' : 'none'
+//                                                     }}
+//                                                 >
+//                                                     <ChevronRight size={16} />
+//                                                 </button>
+//                                             </td>
+//                                         )}
+//                                     </tr>
+//                                     {isExpanded && renderExpandable && (
+//                                         <tr style={{ background: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
+//                                             <td colSpan={columns.length + 1} style={{ padding: '0' }}>
+//                                                 <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border)' }}>
+//                                                     {renderExpandable(row)}
+//                                                 </div>
+//                                             </td>
+//                                         </tr>
+//                                     )}
+//                                 </React.Fragment>
+//                             );
+//                         })}
 //                         {sortedData.length === 0 && (
 //                             <tr>
 //                                 <td colSpan={columns.length + 1} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -136,6 +163,9 @@
 //   }
 // `;
 // document.head.appendChild(style);
+
+
+
 
 
 
@@ -250,7 +280,7 @@ export const DataTable = ({ title, data, columns, onViewAll, onAction, renderExp
                                     <tr style={{ borderBottom: isExpanded ? 'none' : '1px solid var(--border)', transition: 'background 0.2s' }} className="table-row-hover">
                                         {columns.map((col, colIdx) => (
                                             <td key={colIdx} style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: 'var(--text-main)' }}>
-                                                {col.render ? col.render(row[col.key], row) : row[col.key]}
+                                                {col.render ? col.render(row[col.key], row, rowIdx) : row[col.key]}
                                             </td>
                                         ))}
                                         {(showActions || renderExpandable) && (
