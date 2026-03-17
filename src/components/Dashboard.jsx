@@ -27,6 +27,7 @@
 // import Feedback from './Feedback';
 // import AnalyticsTab from './AnalyticsTab';
 // import CAActivity from './CAActivity';
+// import ATSPlatforms from './ATSPlatforms';
 
 // import { supabase } from '../lib/supabase';
 
@@ -35,10 +36,13 @@
 //     const { tab } = useParams();
 //     const activeTab = tab || 'Overview';
 
-//     const [dateRange, setDateRange] = useState('Last 7 Days');
-//     const [customDates, setCustomDates] = useState({ start: '', end: '' });
+//     const [dateRange, setDateRange] = useState(() => localStorage.getItem('dash_dateRange') || 'Yesterday');
+//     const [customDates, setCustomDates] = useState(() => {
+//         const saved = localStorage.getItem('dash_customDates');
+//         return saved ? JSON.parse(saved) : { start: '', end: '' };
+//     });
 //     const [tempCustomDates, setTempCustomDates] = useState({ start: '', end: '' });
-//     const [searchQuery, setSearchQuery] = useState('');
+//     const [searchQuery, setSearchQuery] = useState(() => localStorage.getItem('dash_searchQuery') || '');
 //     const [isLoading, setIsLoading] = useState(true);
 //     const [isDateDropdownOpen, setIsDateDropdownOpen] = useState(false);
 //     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -66,8 +70,11 @@
 //     const [horizontalData, setHorizontalData] = useState([]);
 
 //     useEffect(() => {
+//         localStorage.setItem('dash_dateRange', dateRange);
+//         localStorage.setItem('dash_customDates', JSON.stringify(customDates));
+//         localStorage.setItem('dash_searchQuery', searchQuery);
 //         fetchDashboardData();
-//     }, [dateRange, customDates]);
+//     }, [dateRange, customDates, searchQuery]);
 
 //     const fetchDashboardData = async () => {
 //         setIsLoading(true);
@@ -79,6 +86,11 @@
 
 //             if (dateRange === 'Today') {
 //                 startDate.setHours(0, 0, 0, 0);
+//             } else if (dateRange === 'Yesterday') {
+//                 startDate.setDate(startDate.getDate() - 1);
+//                 startDate.setHours(0, 0, 0, 0);
+//                 endDate.setDate(endDate.getDate() - 1);
+//                 endDate.setHours(23, 59, 59, 999);
 //             } else if (dateRange === 'Last 7 Days') {
 //                 startDate.setDate(startDate.getDate() - 7);
 //                 startDate.setHours(0, 0, 0, 0);
@@ -295,6 +307,7 @@
 //         { icon: <BarChart3 size={20} />, label: 'Analytics' },
 //         { icon: <Briefcase size={20} />, label: 'CA activity' },
 //         { icon: <MessageSquare size={20} />, label: 'Feedback' },
+//         { icon: <Target size={20} />, label: 'ATS Platforms' },
 //         // { icon: <Settings size={20} />, label: 'Settings' },
 //     ];
 
@@ -422,17 +435,19 @@
 //                         <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(true)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-main)' }}>
 //                             <Menu size={24} />
 //                         </button>
-//                         <div className="search-container" style={{ position: 'relative', width: '300px' }}>
-//                             <Search size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-//                             <input
-//                                 type="text"
-//                                 className="input"
-//                                 placeholder="Search..."
-//                                 style={{ paddingLeft: '2.75rem', background: 'var(--bg-main)', border: 'none' }}
-//                                 value={searchQuery}
-//                                 onChange={(e) => setSearchQuery(e.target.value)}
-//                             />
-//                         </div>
+//                         {activeTab !== 'ATS Platforms' && (
+//                             <div className="search-container" style={{ position: 'relative', width: '300px' }}>
+//                                 <Search size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+//                                 <input
+//                                     type="text"
+//                                     className="input"
+//                                     placeholder="Search..."
+//                                     style={{ paddingLeft: '2.75rem', background: 'var(--bg-main)', border: 'none' }}
+//                                     value={searchQuery}
+//                                     onChange={(e) => setSearchQuery(e.target.value)}
+//                                 />
+//                             </div>
+//                         )}
 //                     </div>
 
 //                     <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
@@ -466,7 +481,7 @@
 //                                     width: '160px',
 //                                     zIndex: 100
 //                                 }}>
-//                                     {['Today', 'Last 7 Days', 'Last 30 Days', 'All Time', 'Custom Range'].map(range => (
+//                                     {['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'All Time', 'Custom Range'].map(range => (
 //                                         <div
 //                                             key={range}
 //                                             onClick={() => {
@@ -714,6 +729,8 @@
 //                     <CAActivity searchQuery={searchQuery} dateRange={dateRange} customDates={customDates} />
 //                 ) : activeTab === 'Feedback' ? (
 //                     <Feedback searchQuery={searchQuery} dateRange={dateRange} customDates={customDates} />
+//                 ) : activeTab === 'ATS Platforms' ? (
+//                     <ATSPlatforms searchQuery={searchQuery} dateRange={dateRange} customDates={customDates} />
 //                 ) : (
 //                     <div className="fade-in" style={{
 //                         display: 'flex',
@@ -742,9 +759,6 @@
 // };
 
 // export default Dashboard;
-
-
-
 
 
 
@@ -1480,7 +1494,7 @@ const Dashboard = ({ user, onLogout }) => {
                 ) : activeTab === 'Feedback' ? (
                     <Feedback searchQuery={searchQuery} dateRange={dateRange} customDates={customDates} />
                 ) : activeTab === 'ATS Platforms' ? (
-                    <ATSPlatforms searchQuery={searchQuery} dateRange={dateRange} customDates={customDates} />
+                    <ATSPlatforms dateRange={dateRange} customDates={customDates} />
                 ) : (
                     <div className="fade-in" style={{
                         display: 'flex',
