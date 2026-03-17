@@ -85,22 +85,27 @@
 //             // Calculate date range start
 //             let startDate = new Date(0); // All time default
 //             let endDate = new Date();
-//             endDate.setHours(23, 59, 59, 999);
 
 //             if (dateRange === 'Today') {
 //                 startDate = new Date();
 //                 startDate.setHours(0, 0, 0, 0);
+//                 endDate = new Date();
+//                 endDate.setHours(23, 59, 59, 999);
 //             } else if (dateRange === 'Last 7 Days') {
 //                 startDate = new Date();
 //                 startDate.setDate(startDate.getDate() - 7);
+//                 startDate.setHours(0, 0, 0, 0);
 //             } else if (dateRange === 'Last 30 Days') {
 //                 startDate = new Date();
 //                 startDate.setDate(startDate.getDate() - 30);
+//                 startDate.setHours(0, 0, 0, 0);
 //             } else if (dateRange === 'Last 90 Days') {
 //                 startDate = new Date();
 //                 startDate.setDate(startDate.getDate() - 90);
+//                 startDate.setHours(0, 0, 0, 0);
 //             } else if (dateRange === 'Custom Range' && customDates?.start && customDates?.end) {
 //                 startDate = new Date(customDates.start);
+//                 startDate.setHours(0, 0, 0, 0);
 //                 endDate = new Date(customDates.end);
 //                 endDate.setHours(23, 59, 59, 999);
 //             }
@@ -109,7 +114,7 @@
 //             const endIso = endDate.toISOString();
 
 //             // Fetch all required data
-//             // We fetch ALL profiles to know assignments, but filter activity by date
+//             // We fetch ALL profiles to know assignments
 //             const [profilesRes, feedbacksRes, analyticsRes] = await Promise.all([
 //                 supabase.from('user_profiles').select('email, ca_name, ca_email, client_name, created_at'),
 //                 supabase.from('feedbacks')
@@ -154,7 +159,8 @@
 //                         ca_email: caEmail,
 //                         ca_name: caName,
 //                         profile_all_time_emails: new Set(),
-//                         profile_count: 0, // This will be filtered by date
+//                         active_profiles_in_range: new Set(), // Track unique users with activity
+//                         profile_count: 0,
 //                         feedback_count: 0,
 //                         scan_count: 0,
 //                         client_names: new Set(),
@@ -163,18 +169,17 @@
 //                     };
 //                 }
 
-//                 // Count profiles created within the date range
-//                 const profileDate = new Date(p.created_at);
-//                 if (profileDate >= startDate && profileDate <= endDate) {
-//                     grouped[caEmail].profile_count += 1;
-//                 }
-
 //                 if (p.email) grouped[caEmail].profile_all_time_emails.add(p.email);
 //                 if (p.client_name) grouped[caEmail].client_names.add(p.client_name);
 
-//                 // Track last activity (creation of profile is an activity)
+//                 // Initial last_activity from profile creation (if we want that as activity)
 //                 if (p.created_at && (!grouped[caEmail].last_activity || new Date(p.created_at) > new Date(grouped[caEmail].last_activity))) {
-//                     grouped[caEmail].last_activity = p.created_at;
+//                     // Only count profile creation as activity if it's in the range
+//                     const pDate = new Date(p.created_at);
+//                     if (pDate >= startDate && pDate <= endDate) {
+//                         grouped[caEmail].last_activity = p.created_at;
+//                         if (p.email) grouped[caEmail].active_profiles_in_range.add(p.email);
+//                     }
 //                 }
 //             });
 
@@ -184,6 +189,7 @@
 //                     ca_email: 'Unassigned',
 //                     ca_name: 'Unassigned',
 //                     profile_all_time_emails: new Set(),
+//                     active_profiles_in_range: new Set(),
 //                     profile_count: 0,
 //                     feedback_count: 0,
 //                     scan_count: 0,
@@ -200,6 +206,7 @@
 
 //                 if (grouped[caEmail]) {
 //                     grouped[caEmail].feedback_count += 1;
+//                     if (f.email) grouped[caEmail].active_profiles_in_range.add(f.email);
 //                     if (f.created_at && (!grouped[caEmail].last_activity || new Date(f.created_at) > new Date(grouped[caEmail].last_activity))) {
 //                         grouped[caEmail].last_activity = f.created_at;
 //                     }
@@ -212,6 +219,7 @@
 
 //                 if (grouped[caEmail]) {
 //                     grouped[caEmail].scan_count += 1;
+//                     if (a.user_email) grouped[caEmail].active_profiles_in_range.add(a.user_email);
 //                     grouped[caEmail].all_scans.push(a);
 //                     if (a.created_at && (!grouped[caEmail].last_activity || new Date(a.created_at) > new Date(grouped[caEmail].last_activity))) {
 //                         grouped[caEmail].last_activity = a.created_at;
@@ -219,8 +227,10 @@
 //                 }
 //             });
 
+//             // Convert active_profiles_in_range size to profile_count
 //             const processed = Object.values(grouped).map(ca => ({
 //                 ...ca,
+//                 profile_count: ca.active_profiles_in_range.size,
 //                 client_names_str: Array.from(ca.client_names).join(', ')
 //             }));
 
@@ -229,9 +239,16 @@
 
 //             // Stats (Summing up for the cards)
 //             const totalCAs = Object.keys(grouped).filter(email => email !== 'Unassigned').length;
-//             const totalProfiles = processed.reduce((sum, ca) => sum + (ca.ca_email !== 'Unassigned' ? ca.profile_count : 0), 0);
-//             const totalFeedbacks = processed.reduce((sum, ca) => sum + (ca.ca_email !== 'Unassigned' ? ca.feedback_count : 0), 0);
-//             const totalScans = processed.reduce((sum, ca) => sum + (ca.ca_email !== 'Unassigned' ? ca.scan_count : 0), 0);
+
+//             // For total profiles in range, we should count unique emails across ALL CAs (including Unassigned)
+//             const allActiveEmails = new Set();
+//             processed.forEach(ca => {
+//                 ca.active_profiles_in_range.forEach(email => allActiveEmails.add(email));
+//             });
+
+//             const totalProfiles = allActiveEmails.size;
+//             const totalFeedbacks = processed.reduce((sum, ca) => sum + (ca.feedback_count || 0), 0);
+//             const totalScans = processed.reduce((sum, ca) => sum + (ca.scan_count || 0), 0);
 
 //             setStats({ totalCAs, totalProfiles, totalFeedbacks, totalScans });
 
@@ -339,6 +356,11 @@
 
 //     const columns = [
 //         {
+//             header: 'S.No',
+//             key: 's_no',
+//             render: (_, __, idx) => <span style={{ fontWeight: '600', color: 'var(--text-muted)' }}>{idx + 1}</span>
+//         },
+//         {
 //             header: 'CA Name',
 //             key: 'ca_name',
 //             render: (val) => (
@@ -363,7 +385,7 @@
 //         },
 //         { header: 'CA Email', key: 'ca_email' },
 //         {
-//             header: 'Profiles',
+//             header: 'Active Profiles',
 //             key: 'profile_count',
 //             render: (val) => (
 //                 <span style={{
@@ -374,7 +396,7 @@
 //                     fontWeight: '600',
 //                     fontSize: '0.75rem'
 //                 }}>
-//                     {val} Records
+//                     {val} Profiles used
 //                 </span>
 //             )
 //         },
@@ -746,8 +768,6 @@
 
 
 
-
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { DataTable } from './DataTable';
@@ -840,6 +860,13 @@ const CAActivity = ({ searchQuery: globalSearchQuery, dateRange, customDates }) 
                 startDate = new Date();
                 startDate.setHours(0, 0, 0, 0);
                 endDate = new Date();
+                endDate.setHours(23, 59, 59, 999);
+            } else if (dateRange === 'Yesterday') {
+                startDate = new Date();
+                startDate.setDate(startDate.getDate() - 1);
+                startDate.setHours(0, 0, 0, 0);
+                endDate = new Date();
+                endDate.setDate(endDate.getDate() - 1);
                 endDate.setHours(23, 59, 59, 999);
             } else if (dateRange === 'Last 7 Days') {
                 startDate = new Date();
