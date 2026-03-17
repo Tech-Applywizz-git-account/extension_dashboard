@@ -1066,12 +1066,12 @@ const Dashboard = ({ user, onLogout }) => {
 
     const sidebarItems = [
         { icon: <LayoutDashboard size={20} />, label: 'Overview' },
+        { icon: <Target size={20} />, label: 'ATS Platforms' },
         { icon: <BrainCircuit size={20} />, label: 'Learned Patterns' },
         // { icon: <Users size={20} />, label: 'Active Users' },
         { icon: <BarChart3 size={20} />, label: 'Analytics' },
         { icon: <Briefcase size={20} />, label: 'CA activity' },
         { icon: <MessageSquare size={20} />, label: 'Feedback' },
-        { icon: <Target size={20} />, label: 'ATS Platforms' },
         // { icon: <Settings size={20} />, label: 'Settings' },
     ];
 
